@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Local Information</title>
+    <link rel="shortcut icon" type="image/png" href="https://cdn0.iconfinder.com/data/icons/social-icons-rounded/110/Information-Bubble-512.png"/>
+    <style>
+    	#map{
+    		height: 300px;
+    		width: 100%;
+    	}
+    	#cardplaces{
+    		height:300px;
+    	}
+    	#main_container{
+    		max-width: 700px;
+    		border: 1px solid #ccc;
+    	}
+    	#weather{
+    		height: 200px;
+    	}
+    	.nopadding{
+    		padding: 0 !important;
+    		margin: 0 !important;
+    	}
+    	.cardpadding{
+    		padding-top: 0 !important;
+    		padding-left: 0.2em !important;
+    		padding-right: 0.2em !important;
+    	}
+    	.centertext{
+    		text-align: center;
+    	}
+    </style>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+  	<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+</head>
+<body>
+
+<div class="container mt-3 px-5 py-4 rounded shadow" id="main_container">
+    <form id="location-form" novalidate>
+    	<div class="form-group row">
+    		<div class="col nopadding">
+    			<label for="location-input" class="col-form-label text-right">Post Code</label>
+    		</div>
+    		<div class="col-7 nopadding">
+    			<input type="text" id="location-input" placeholder="160-0022" class="form-control" pattern="^\d{3}-\d{4}$" required>
+    			<div class="invalid-feedback" id="errorField"></div>
+    			<small id="notfound" class="form-text text-muted"></small>
+    		</div>
+    		<div class="col-3">
+    			<button type="submit" class="btn btn-secondary btn-block">Submit</button>
+    		</div>
+      </div>
+    </form>
+    <div>
+    	<h2 id="heading" class="mb-2">Tokyo, Shinjuku City</h2>
+    	<h6>3-day forecast</h6>
+    </div>
+    <div class="row mb-3">
+    	<div class="col">
+    		<div class="card">
+	    		<img class="card-img-top" src="" alt="Weather">
+	  			<div class="card-body cardpadding">
+	  				<p class="card-subtitle centertext"></p>
+	    			<h5 class="card-title centertext"></h5>
+	  				<p class="card-subtitle centertext"></p>
+	  			</div>
+	  		</div>
+    	</div>
+    	<div class="col">
+	    	<div class="card">
+	    		<img class="card-img-top" src="" alt="Weather">
+	  			<div class="card-body cardpadding">
+	  				<p class="card-subtitle centertext"></p>
+	    			<h5 class="card-title centertext"></h5>
+	  				<p class="card-subtitle centertext"></p>
+	  			</div>
+	  		</div>
+    	</div>
+    	<div class="col">
+    		<div class="card">
+	    		<img class="card-img-top" src="" alt="Weather">
+	  			<div class="card-body cardpadding">
+	  				<p class="card-subtitle centertext"></p>
+	    			<h5 class="card-title centertext"></h5>
+	  				<p class="card-subtitle centertext"></p>
+	  			</div>
+	  		</div>
+    	</div>
+    </div>
+    <div class="row">
+    	<div class="col">
+    		<h5>Map</h5>
+    	<div class="card-block" id="map"></div>
+    	</div>
+    	<div class="col">
+    		<h5>Restaurants (Click for marker)</h5>
+    		<div class="card">
+    			<div class="card-body cardpadding overflow-auto" id="cardplaces">
+    				<ul id="places" class="list-group list-group-flush"></ul>
+  				</div>
+			</div>
+    	</div>
+    </div>
+</div>
+
+<script>
+    function init(){
+    	//Initialize map and marker
+        var location = new google.maps.LatLng(35.693840, 139.703549)
+        var map = new google.maps.Map(document.getElementById("map"), {
+            zoom: 14,
+            center: location
+        });
+        var marker = new google.maps.Marker({
+          	position: location,
+         	map: map,
+        });
+
+        //Initialize restaurants
+        var request = {
+					location: location,
+				   	radius: '500',
+				   	type: ['restaurant']
+				};
+	    var service = new google.maps.places.PlacesService(map);
+  		service.nearbySearch(request, updatePlaces);
+
+  		//Initialize weather
+        updateWeather(location.lat(), location.lng())
+
+        //Globals
+        var weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        var places = document.getElementById('places')
+        var errorField = document.getElementById('errorField');
+		var inp = document.getElementById('location-input');
+		var heading = document.getElementById('heading');
+		var notfound = document.getElementById('notfound');
+		var cards = document.getElementsByClassName('card');
+		var locationForm = document.getElementById('location-form');
+    	locationForm.addEventListener('submit', newLocation);
+
+    	//On new post-code
+    	function newLocation(e){
+	      	e.preventDefault();
+
+	      	//Change to Googles accepted format, from NNN-NNNN to NNNNNNN
+	      	var postcode = inp.value.replace('-','');
+	      	//Notice if post-code not found
+	      	notfound.innerHTML = '';
+
+	      	//Validation based on regex pattern, see the html for "location-input"
+	      	if(inp.checkValidity() === false){
+	      		locationForm.classList.add('was-validated');
+	      		errorField.innerHTML = 'Please input a valid post-code: ddd-dddd, where d is a digit.';
+	      		return
+	      	}
+
+	      	//Fetch localization information from google maps api
+	      	axios.get('https://maps.googleapis.com/maps/api/geocode/json',{
+	        	params:{
+	          	address:postcode,
+	          	key:'AIzaSyATf73Nlz6BjuwY1OUzRqbUx8BBMXUIMnc'
+	        	}
+	      	})
+	      	.then(function(response){
+	      		//Check if post code not found
+	        	if(response.data.status === 'ZERO_RESULTS'){
+	        		notfound.innerHTML = 'It looks like this post-code does not exist.<br>Please try another.';
+	        		return
+	        	}
+
+	        	var results = response.data.results[0];
+	        	var lat = results.geometry.location.lat;
+	        	var lng = results.geometry.location.lng;
+	        	var address = results.address_components;
+
+	        	//Show city and prefecture name (removed postcode and country name)
+	        	heading.innerHTML = address.slice(1,-1).map((x) => x.long_name).reverse().join(', ');
+	        	updateWeather(lat, lng)
+
+	        	//Update map and marker
+	       		location = new google.maps.LatLng(lat, lng);
+	    		map.panTo(location);
+	    		marker.setPosition(location);
+
+	    		//Clear old restaurant list
+	    		while (places.lastChild) {
+    				places.removeChild(places.lastChild);
+				}
+	        	request = {
+					location: location,
+				   	radius: '500',
+				   	type: ['restaurant']
+				};
+	        	service = new google.maps.places.PlacesService(map);
+  				service.nearbySearch(request, updatePlaces);
+	      	})
+	      	.catch(function(error){
+	        	console.log(error);
+	      	});
+	    }
+
+	    function updatePlaces(results, status){
+	    	//Fill restaurant list
+	    	if (status == google.maps.places.PlacesServiceStatus.OK) {
+			    results.forEach((place) => {
+			    	var newPlace = document.createElement('li')
+			    	places.appendChild(newPlace)
+			    	newPlace.classList.add('list-group-item')
+			    	newPlace.innerHTML = 'Name: '+place.name+'<br>Rating: '+place.rating+'<br>Address: '+place.vicinity
+			    	newPlace.addEventListener('click', addMarker(place.geometry.location))
+			    });
+  			}	
+	    }
+
+	    var addMarker = (location) => () => {
+	    	//Add marker for clicked restaurant
+	    	var marker = new google.maps.Marker({
+          		position: location,
+         		map: map,
+        	});
+	    }
+
+	    function updateWeather(lat, lng){
+	    	//3 day weather forecast based on longitude and latitude
+	    	axios.get('https://api.weatherbit.io/v2.0/forecast/daily',{
+	        	params:{
+	        	lat:lat,
+	          	lon:lng,
+	          	days:3,
+	          	key:'ba500da895e145edadea7d18dbcf3204'
+	        	}
+	      	})
+	      	.then(function(response){
+	        	//Extract wanted info for each day
+	        	var weather = response.data.data.map((day) => ({
+	        		date: day.datetime,
+	        		max_temp: day.max_temp,
+	        		min_temp: day.min_temp,
+	        		weather: day.weather.description,
+	        		icon: day.weather.icon
+	        	}))
+	        	//Update weather cards
+	        	weather.map((e, i) => {
+	        		cards[i].children[0].src = 'https://www.weatherbit.io/static/img/icons/'+e.icon+'.png';
+	        		var cardbody = cards[i].children[1].children;
+	        		cardbody[0].innerHTML = e.date+'  '+weekdays[new Date(e.date).getDay()];
+	        		cardbody[1].innerHTML = e.weather;
+	        		cardbody[2].innerHTML = 'Max: '+e.max_temp+'°  Min: '+e.min_temp+'°';
+	        	})
+	      	})
+	      	.catch(function(error){
+	        	console.log(error);
+	      	});
+	    }
+    }
+</script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?libraries=places&key=AIzaSyATf73Nlz6BjuwY1OUzRqbUx8BBMXUIMnc&callback=init"></script>
+
+</body>
+</html>
